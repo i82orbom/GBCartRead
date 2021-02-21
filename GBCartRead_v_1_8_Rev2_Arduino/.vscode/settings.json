@@ -1,0 +1,7 @@
+{
+    "C_Cpp.errorSquiggles": "Disabled",
+    "files.associations": {
+        "types.h": "c",
+        "io.h": "c"
+    }
+}

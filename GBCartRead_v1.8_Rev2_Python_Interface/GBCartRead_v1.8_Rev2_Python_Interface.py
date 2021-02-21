@@ -1,3 +1,9 @@
+# GBCartRead - Arduino Interface
+# Version: 1.8 Rev 1
+# Author: Alex from insideGadgets (http://www.insidegadgets.com)
+# Created: 18/03/2011
+# Last Modified: 26/05/2016
+
 import serial
 import string
 import sys
@@ -6,9 +12,9 @@ import atexit
 
 # Change COM2 to the port the Arduino is on.
 # You can lower the baud rate of 400Kbit if you have issues connecting to the Arduino or the ROM has checksum errors
-ser = serial.Serial('COM2', 400000, timeout=1) 
+ser = serial.Serial('/dev/cu.usbmodem14301', 115200, timeout=1) 
 
-sys.stdout.write('\nGBCartRead v1.6 by insideGadgets\n')
+sys.stdout.write('\nGBCartRead v1.8 by insideGadgets\n')
 sys.stdout.write('#################################\n')
 sys.stdout.flush()
 
@@ -16,16 +22,14 @@ time.sleep(2)
 
 waitInput = 1
 userInput = "0"
-firstStart = 1
+gameTitle = "unknown"
 
 while (waitInput == 1):
-    if (firstStart == 0):
-        sys.stdout.write('\nSelect an option below\n0. Read Header\n1. Dump ROM\n2. Save RAM\n3. Write RAM\n4. Exit\n')
-        sys.stdout.write('>')
-        sys.stdout.flush()
-        userInput = input()
+    sys.stdout.write('\nSelect an option below\n0. Read Header\n1. Dump ROM\n2. Save RAM\n3. Write RAM\n4. Exit\n')
+    sys.stdout.write('>')
+    sys.stdout.flush()
+    userInput = input()
 
-    firstStart = 0
     if (userInput == "0"):
         ser.write('HEADER'.encode())
         sys.stdout.write('\n')
@@ -141,6 +145,14 @@ while (waitInput == 1):
             print ('128 KBytes (16 banks of 8Kbytes)')
         else:
             print ('Not Found')
+
+        sys.stdout.write('Logo Check... ')
+        logoCheck = ascii(ser.readline())
+        logoCheck = int(logoCheck[2:(len(logoCheck)-5)])
+        if (logoCheck == 1):
+            print ('OK')
+        elif (logoCheck == 0):
+            print ('Failed')
 
     elif (userInput == "1"):      
         sys.stdout.write('\nDumping ROM to ' + gameTitle + '.gb... ')
