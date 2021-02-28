@@ -1,4 +1,7 @@
 #include <Arduino.h>
+#include <SPI.h>
+#include <avr/pgmspace.h>
+#include <avr/wdt.h>
 
 #include "gbcart.h"
 #include "io.h"
@@ -45,16 +48,14 @@ void loop()
     Serial.println(readCartridgeHeader.logoCheck);
     break;
   case CMD_READ_ROM:
-    delay(200);
     readROM();
     break;
   case CMD_READ_RAM:
-    delay(200);
     readRAM();
     break;
   case CMD_WRITE_RAM:
-    delay(200);
     writeRAM();
+    break;
   default:
     Serial.println("Unknown command received");
     break;
@@ -67,14 +68,21 @@ void readROM()
   {
     readCartridgeHeader = readHeader();
   }
+  resetCtrlPins();
   uint16_t romAddress = 0;
 
   // Read number of banks and switch banks
   for (uint16_t bank = 1; bank < readCartridgeHeader.romBanks; bank++)
   {
+    setDataOutput();
     if (readCartridgeHeader.cartridgeType >= 5)
     {                          // MBC2 and above
+      if (DEBUG) {
+        Serial.print("Changing bank to: ");
+        Serial.println(bank);
+      }
       writeData(0x2100, bank); // Set ROM bank
+      
     }
     else
     {                                 // MBC1
@@ -86,24 +94,27 @@ void readROM()
     {
       romAddress = 0x4000;
     }
-
+    setDataInput();
     // Read up to 7FFF per bank
-    while (romAddress <= 0x7FFF)
+    
+    for (; romAddress <= 0x7FFF; romAddress += 64)
     {
       uint8_t data[64];
-      for (uint8_t i = 0; i < 64; i++)
+      for (int i = 0; i < 64; i++)
       {
         data[i] = readData(romAddress + i);
       }
-
-      Serial.write(data, 64); // Send the 64 byte chunk
-      romAddress += 64;
+      if (!DEBUG) {
+        Serial.write(data, 64); // Send the 64 byte chunk
+      }
     }
   }
 }
 
 void readRAM()
 {
+  resetCtrlPins();
+
   if (readCartridgeHeader.isRead == 0)
   {
     readCartridgeHeader = readHeader();
@@ -115,6 +126,8 @@ void readRAM()
   // Does cartridge have RAM
   if (readCartridgeHeader.ramEndAddress > 0)
   {
+    setDataOutput();
+
     if (readCartridgeHeader.cartridgeType <= 4)
     {                       // MBC1
       writeData(0x6000, 1); // Set RAM Mode
@@ -126,8 +139,11 @@ void readRAM()
     // Switch RAM banks
     for (uint8_t bank = 0; bank < readCartridgeHeader.ramBanks; bank++)
     {
+      setDataOutput();
+
       writeData(0x4000, bank);
 
+      setDataInput();
       // Read RAM
       for (uint16_t ramAddress = 0xA000; ramAddress <= readCartridgeHeader.ramEndAddress; ramAddress += 64)
       {
@@ -141,6 +157,8 @@ void readRAM()
       }
     }
 
+    setDataOutput();
+
     // Disable RAM
     writeData(0x0000, 0x00);
   }
@@ -148,45 +166,52 @@ void readRAM()
 
 void writeRAM()
 {
+  if (readCartridgeHeader.isRead == 0)
+  {
+    readCartridgeHeader = readHeader();
+  }
+  resetCtrlPins();
+
+  setDataOutput();
   // MBC2 Fix (unknown why this fixes it, maybe has to read ROM before RAM?)
   readData(0x0134);
 
+  setDataInput();
   // Does cartridge have RAM
   if (readCartridgeHeader.ramEndAddress > 0)
   {
-    if (readCartridgeHeader.cartridgeType <= 4)
-    {                       // MBC1
+    if (readCartridgeHeader.cartridgeType <= 4)   // MBC1
+    {                     
       writeData(0x6000, 1); // Set RAM Mode
     }
 
-    // Initialise MBC
-    writeData(0x0000, 0x0A);
+    // Enable RAM
+    writeData(0x0000, 0xA);
 
     // Switch RAM banks
-    for (uint8_t bank = 0; bank < readCartridgeHeader.ramBanks; bank++)
+    for (int bank = 0; bank < readCartridgeHeader.ramBanks; bank++)
     {
-      writeData(0x4000, bank);
 
+      writeData(0x4000, bank);      
       // Write RAM
       for (uint16_t ramAddress = 0xA000; ramAddress <= readCartridgeHeader.ramEndAddress; ramAddress++)
-      {
+      {        
         // Wait for serial input
         while (Serial.available() <= 0)
           ;
-
+        
         // Read input
         uint8_t readValue = (uint8_t)Serial.read();
-
-        // Write to RAM
-        enableWriteRAM();
-
+        
+        setDataOutput();
+        csLOW();
         writeData(ramAddress, readValue);
 
         asm volatile("nop");
         asm volatile("nop");
         asm volatile("nop");
+        csHIGH();
 
-        disableWriteRAM();
       }
     }
 
@@ -194,6 +219,7 @@ void writeRAM()
     writeData(0x0000, 0x00);
     Serial.flush(); // Flush any serial data that wasn't processed
   }
+  resetCtrlPins();
 }
 
 int readCommand()
@@ -218,6 +244,9 @@ int readCommand()
   else if (strstr(input, "READRAM"))
   {
     return CMD_READ_RAM;
+  }
+  else if (strstr(input, "WRITERAM")) {
+    return CMD_WRITE_RAM;
   }
   return CMD_UNKNOWN;
 }

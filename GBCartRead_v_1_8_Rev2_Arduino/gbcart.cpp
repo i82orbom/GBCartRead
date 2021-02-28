@@ -150,6 +150,8 @@ char *getGameTitle()
 
 struct Cartridge readHeader()
 {
+    resetCtrlPins();
+
     // Read cartridge title and check for non-printable text
     struct Cartridge cart;
 

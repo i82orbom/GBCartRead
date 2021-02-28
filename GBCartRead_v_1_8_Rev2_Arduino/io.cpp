@@ -1,67 +1,100 @@
 #include "io.h"
 #include <Arduino.h>
 
-int DATA_PINS[8] = {23, 22, 25, 24, 27, 26, 29, 28};                                  // D7...D0
-int ADDR_PINS[16] = {46, 47, 44, 45, 42, 43, 40, 41, 38, 39, 36, 37, 34, 35, 32, 33}; // A0...A16
+// int DATA_PINS[8] = {A0, A1, A2, A3, A4, A5, A6, A7};
+
+int DATA_PINS[8] = {23, 22, 25, 24, 27, 26, 29, 28};  // D7....D0
+int ADDR_PINS[16] = {44, 45, 42, 43, 40, 41, 38, 39, 36, 37, 34, 35, 32, 33, 30, 31}; // A0...A16
 
 int READ_PIN = 50;
-int WRITE_PIN = 53;
-int CS1_PIN = 51;
+int WRITE_PIN = 51;
+int CS1_PIN = 53;
 
-#define ARRAY_COUNT(arr) (signed int)(sizeof(arr) / sizeof(arr[0]))
+void enableRead() {
+    digitalWrite(READ_PIN, LOW);
+}
+
+void disableRead() {
+    digitalWrite(READ_PIN, HIGH);
+}
+
+void enableWrite() {
+    digitalWrite(WRITE_PIN, LOW);
+}
+
+void disableWrite() {
+    digitalWrite(WRITE_PIN, HIGH);
+}
+
+void csLOW() {
+    digitalWrite(CS1_PIN, LOW);
+}
+
+void csHIGH() {
+    digitalWrite(CS1_PIN, HIGH);
+}
+
+void setDataOutput() {
+     for (int pin = 0; pin < 8; pin++){
+        pinMode(DATA_PINS[pin], OUTPUT);
+    }
+}
+
+void setDataInput() {
+     for (int pin = 0; pin < 8; pin++){
+        pinMode(DATA_PINS[pin], INPUT);
+    }
+}
 
 void setAddress(uint16_t address)
 {
-    uint16_t mask = 0x1;
-    for (int pin = 0; pin < ARRAY_COUNT(ADDR_PINS); pin++)
+    for (uint16_t pin = 0; pin < 16; pin++)
     {
-        digitalWrite(ADDR_PINS[pin], HIGH && (address & mask));
-        mask <<= 1;
-    }
+        uint16_t val = HIGH && (address & (0x1 << pin));
+        digitalWrite(ADDR_PINS[pin], val);
+    }   
 }
 
 uint8_t readData(uint16_t address)
 {
     setAddress(address);
-    delayMicroseconds(50);
+    __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+
+    enableRead();
+    csLOW();
+
+    __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t");
 
     uint8_t data = 0;
-    for (int pin = 0; pin < ARRAY_COUNT(DATA_PINS); pin++)
-    {
-        int bit = digitalRead(DATA_PINS[pin]) ? 1 : 0;
-        data = (data << 1) + bit;
+    for (int pin = 0; pin < 8; pin++)
+    {   
+        uint8_t bit = digitalRead(DATA_PINS[pin]) ? HIGH : LOW;
+        data = (data << 1) | bit;
     }
+
+    disableRead();
+    csHIGH();
+
+    __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+
     return data;
 }
 
 void writeData(uint16_t address, uint8_t data)
 {
     setAddress(address);
-
-    // Set pins as outputs
-    uint16_t mask = 0x1;
-
-    for (int pin = 0; pin < ARRAY_COUNT(DATA_PINS); pin++)
-    {
-        pinMode(DATA_PINS[pin], OUTPUT);
-
-        digitalWrite(ADDR_PINS[pin], HIGH && (data & mask));
-        mask <<= 1;
+  
+    // Write data
+    for (int i = 0; i < 8; i++){
+        uint8_t val = bitRead(data, 7-i);
+      
+        // From D7 to D0
+        digitalWrite(DATA_PINS[i], val);
     }
 
-    digitalWrite(READ_PIN, HIGH); // Read disable
-    digitalWrite(WRITE_PIN, LOW); // Write enable
-
-    asm volatile("nop");
-
-    digitalWrite(READ_PIN, LOW);   // Read enable
-    digitalWrite(WRITE_PIN, HIGH); // Write disable
-
-    // Restore pins as inputs
-    for (int pin = 0; pin < ARRAY_COUNT(DATA_PINS); pin++)
-    {
-        pinMode(DATA_PINS[pin], INPUT);
-    }
+    enableWrite();
+    __asm__("nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+    disableWrite();
 }
 
 void setupPins()
@@ -80,17 +113,28 @@ void setupPins()
     pinMode(WRITE_PIN, OUTPUT);
     pinMode(CS1_PIN, OUTPUT);
 
-    digitalWrite(READ_PIN, LOW);   // Read enable
-    digitalWrite(WRITE_PIN, HIGH); // Write disable
-    digitalWrite(CS1_PIN, HIGH);   // READ ROM
+    resetCtrlPins();
 }
 
 void enableWriteRAM()
 {
-    digitalWrite(CS1_PIN, LOW); // WRITE RAM
+    digitalWrite(CS1_PIN, LOW); // Select RAM
 }
 
 void disableWriteRAM()
 {
-    digitalWrite(CS1_PIN, LOW); // READ ROM
+    digitalWrite(CS1_PIN, HIGH); // Select ROM
+}
+
+// Turn READ_PIN, WRITE_PIN and CS1_PIN to high so they are deselected (reset state)
+void resetCtrlPins() {
+    digitalWrite(READ_PIN, HIGH);
+    digitalWrite(WRITE_PIN, HIGH);
+    digitalWrite(CS1_PIN, HIGH);
+}
+
+void offCtrlPins() {
+    digitalWrite(READ_PIN, LOW);
+    digitalWrite(WRITE_PIN, LOW);
+    digitalWrite(CS1_PIN, LOW);
 }

@@ -12,7 +12,7 @@ import atexit
 
 # Change COM2 to the port the Arduino is on.
 # You can lower the baud rate of 400Kbit if you have issues connecting to the Arduino or the ROM has checksum errors
-ser = serial.Serial('/dev/cu.usbmodem14301', 115200, timeout=1) 
+ser = serial.Serial('/dev/cu.usbmodem14101', 115200, timeout=1) 
 
 sys.stdout.write('\nGBCartRead v1.8 by insideGadgets\n')
 sys.stdout.write('#################################\n')
@@ -154,7 +154,10 @@ while (waitInput == 1):
         elif (logoCheck == 0):
             print ('Failed')
 
-    elif (userInput == "1"):      
+    elif (userInput == "1"):
+        if gameTitle == "":
+            gameTitle = "unknown"
+
         sys.stdout.write('\nDumping ROM to ' + gameTitle + '.gb... ')
         readBytes = 0
         inRead = 1
@@ -240,7 +243,7 @@ while (waitInput == 1):
                     if not line1:
                         break
                     ser.write(line1)
-                    time.sleep (0.005); # Wait 5ms for Arduino to process the 64 bytes
+                    time.sleep (0.100); # Wait 1000ms for Arduino to process the 64 bytes
                     
                 sys.stdout.write('\nFinished\n\n')
                 sys.stdout.flush()

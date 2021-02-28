@@ -3,5 +3,5 @@
     "configuration": "cpu=atmega2560",
     "programmer": "AVRISP mkII",
     "sketch": "main.cpp",
-    "port": "/dev/tty.usbmodem14301"
+    "port": "/dev/tty.usbmodem14101"
 }
